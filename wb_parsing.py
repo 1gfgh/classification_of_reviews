@@ -1,5 +1,5 @@
 from bs4 import BeautifulSoup
-
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -17,7 +17,7 @@ class Review(BaseModel):
     review_rating: int
 
 
-def clean_review_text(func):
+def CleanReviewText(func):
     def wrapper(*args, **kwargs):
         reviews = func(*args, **kwargs)
         if reviews is None:
@@ -43,7 +43,7 @@ def clean_review_text(func):
         return cleaned_reviews
     return wrapper
 
-def get_review_url(browser):
+def GetReviewUrl(browser) -> str:
     try:
         WebDriverWait(browser, 30).until(
             EC.presence_of_element_located((By.CLASS_NAME, "j-wba-card-item"))
@@ -63,8 +63,8 @@ def get_review_url(browser):
         logging.warning("Could not find review URL")
         return None
 
-@clean_review_text
-def get_all_reviews(browser) -> list[Review]:
+@CleanReviewText
+def getAllReviews(browser) -> list[Review]:
     try:
         WebDriverWait(browser, 30).until(
             EC.presence_of_element_located((By.CLASS_NAME, "feedback__content"))
@@ -96,14 +96,14 @@ def get_all_reviews(browser) -> list[Review]:
         return None
     
 
-def get_good_name(browser) -> str:
+def GetGoodName(browser) -> str:
     try:
         WebDriverWait(browser, 30).until(
             EC.presence_of_element_located((By.CLASS_NAME, "product-page__title"))
         )
-        logging.info("Found good's name")
+        logging.info("Found good's name block")
     except Exception as e:
-        logging.warning("Good's name wasn't found")
+        logging.warning("Good's name block wasn't found")
         return None
 
     soup = BeautifulSoup(browser.page_source, "lxml")
@@ -115,10 +115,66 @@ def get_good_name(browser) -> str:
         logging.warning("Could not find good's name")
         return None
 
-def main():
-    url = "https://www.wildberries.ru/catalog/138795522/detail.aspx"
+
+def GetGoodDescription(browser) -> str:
+    try:
+        WebDriverWait(browser, 30).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "j-details-btn-desktop"))
+        ).click()
+    except Exception as e:
+        logging.warning("Block of characteristics wasn't found!")
+        return None
+    try:
+        WebDriverWait(browser, 30).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "product-details"))
+        )
+        logging.info("Good's description block was found")
+    except Exception as e:
+        logging.warning("Good's description block wasn't found")
+        return None
+    
+    soup = BeautifulSoup(browser.page_source, "lxml")
+    description = soup.find('p', class_="option__text")
+    if description:
+        logging.info(f"Good's description: {description.get_text().strip()}")
+        return description.get_text().strip()
+    else:
+        logging.warning("Could not find good's description")
+        return None
+    
+
+def UploadReviews(reviews: list[Review], name: str, description: str) -> None:
+    data = pd.DataFrame()
+    try:
+        with open("wb_reviews.csv", 'r') as file:
+            data = pd.read_csv(file)
+    except FileNotFoundError:
+        data = pd.DataFrame(columns=["Good's name", "Description", "Review", "Rating"])
+    time_point = time.time()
+    for review in reviews:
+        elem = {
+            "Good's name": name, 
+            "Description": description, 
+            "Review": review.review_text, 
+            "Rating": review.review_rating
+        }
+        data.loc[data.shape[0]] = elem
+        if time.time() - time_point > 600:
+            data.to_csv(f"presave_wb_reviews.csv", index=False)
+            logging.info("Presave of data has been done!")
+    data.to_csv(f"wb_reviews.csv", index=False)
+    logging.info(f"Size of our DataFrame is {data.shape[0]}")
+
+
+def parse(url: str) -> None:
+    try:
+        with open("links.txt", 'a') as file:
+            file.write(f"{url}\n")
+        logging.info("Link has been saved!")
+    except FileNotFoundError:
+        logging.fatal("No file 'links.txt' to save ur link!")
+        return
     options = webdriver.ChromeOptions()
-    # options.add_argument("headless")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-setuid-sandbox")
@@ -128,32 +184,39 @@ def main():
     options.add_argument("--remote-debugging-port=9230")
     browser = webdriver.Chrome(options=options)
     browser.get(url)
-    good_name = get_good_name(browser)
+    good_name = GetGoodName(browser)
     if good_name:
         print("\n" + "="*50)
         print(f"Good's name: {good_name}")
         print("="*50 + "\n")
     else:
         print("\nNo good name found")
-    reviews_url = get_review_url(browser)
+    reviews_url = GetReviewUrl(browser)
+    good_description = GetGoodDescription(browser)
+    if good_description:
+        print("\n" + "="*50)
+        print(f"Good's description: {good_description}")
+        print("="*50 + "\n")
+    else:
+        print("\nNo good's description found")
     if reviews_url:
         browser.get(reviews_url)
         start_time = time.time()
         last_height = browser.execute_script("return document.body.scrollHeight")
         while True:
-            if time.time() - start_time > 10:
-                logging.info("Reached 1 minute timeout, stopping scroll")
+            if time.time() - start_time > 3600:
+                logging.info("Reached timeout, stopping scroll")
                 break
                 
             browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             
-            time.sleep(5)
+            time.sleep(10)
             
             new_height = browser.execute_script("return document.body.scrollHeight")
             if new_height == last_height:
                 break
             last_height = new_height
-        reviews = get_all_reviews(browser)
+        reviews = getAllReviews(browser)
         print(type(reviews))
         if reviews:
             print("\n" + "="*50)
@@ -168,9 +231,27 @@ def main():
             print("\nNo reviews found")
     else:
         logging.warning("Could not find review URL")
+    UploadReviews(reviews, good_name, good_description)
     browser.stop_client()
     browser.close()
     browser.quit()
+
+
+def main():
+    urls = ["https://www.wildberries.ru/catalog/156411600/detail.aspx", "https://www.wildberries.ru/catalog/168158196/detail.aspx", "https://www.wildberries.ru/catalog/84982268/detail.aspx",
+            "https://www.wildberries.ru/catalog/42487229/detail.aspx", "https://www.wildberries.ru/catalog/44587938/detail.aspx", "https://www.wildberries.ru/catalog/35678773/detail.aspx",
+            "https://www.wildberries.ru/catalog/50447526/detail.aspx", "https://www.wildberries.ru/catalog/9512622/detail.aspx", "https://www.wildberries.ru/catalog/95681073/detail.aspx",
+            "https://www.wildberries.ru/catalog/94333394/detail.aspx", "https://www.wildberries.ru/catalog/118814103/detail.aspx", "https://www.wildberries.ru/catalog/226099897/detail.aspx",
+            "https://www.wildberries.ru/catalog/174525702/detail.aspx", "https://www.wildberries.ru/catalog/127684147/detail.aspx", "https://www.wildberries.ru/catalog/168566996/detail.aspx",
+            "https://www.wildberries.ru/catalog/241285405/detail.aspx", "https://www.wildberries.ru/catalog/9090858/detail.aspx", "https://www.wildberries.ru/catalog/148825454/detail.aspx",
+            "https://www.wildberries.ru/catalog/51503671/detail.aspx", "https://www.wildberries.ru/catalog/158087310/detail.aspx", "https://www.wildberries.ru/catalog/75545007/detail.aspx",
+            "https://www.wildberries.ru/catalog/311070245/detail.aspx", "https://www.wildberries.ru/catalog/12023112/detail.aspx", "https://www.wildberries.ru/catalog/29251219/detail.aspx",
+            "https://www.wildberries.ru/catalog/65931166/detail.aspx", "https://www.wildberries.ru/catalog/99949562/detail.aspx", "https://www.wildberries.ru/catalog/244911722/detail.aspx",
+            "https://www.wildberries.ru/catalog/241070430/detail.aspx", "https://www.wildberries.ru/catalog/198711201/detail.aspx", "https://www.wildberries.ru/catalog/141152145/detail.aspx"]
+    for url in urls:
+        parse(url)
+    return
+
 
 if __name__ == "__main__":
     main()
