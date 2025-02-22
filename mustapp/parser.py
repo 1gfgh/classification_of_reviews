@@ -26,139 +26,155 @@ https://mustapp.com/p/i
 """
 
 # ======================  Настройка тут  ======================
-START_PAGE = 1   # понятно
-MAX_PAGES = 1000 # ну понятно
-MAX_BUF = 200    # каждые MAX_BUF страниц делать пресейв
+START_PAGE = 1  # понятно
+MAX_PAGES = 1000  # ну понятно
+MAX_BUF = 200  # каждые MAX_BUF страниц делать пресейв
 # =============================================================
 
 COUNT_BUF = 0
 COUNT_FLUSHES = 1
 
-data = pd.DataFrame(columns=['Mustapp page ID', 'Title', 'Description', 'Review text', 'Score (out of 10)'])
+data = pd.DataFrame(
+    columns=[
+        "Mustapp page ID",
+        "Title",
+        "Description",
+        "Review text",
+        "Score (out of 10)",
+    ]
+)
 
 # Не хочу постоянно открывающийся браузер
 options = webdriver.ChromeOptions()
-options.add_argument('headless')
+options.add_argument("headless")
 
 for i in range(START_PAGE, MAX_PAGES + 1):
-    url = f'https://mustapp.com/p/{i}'
+    url = f"https://mustapp.com/p/{i}"
 
-    logging.info(f'======================  {i}  ======================')
+    logging.info(f"======================  {i}  ======================")
     start_time = time.time()
     try:
         browser = webdriver.Chrome(options=options)
         browser.get(url)
     except InvalidSessionIdException as e:
-        logging.info(f'GET {url} отдыхает')
+        logging.info(f"GET {url} отдыхает")
         COUNT_BUF += 1
         continue
     end_time = time.time()
     elapsed_time = end_time - start_time
     logging.info(f"Подключение заняло {elapsed_time:.2f} сек.")
 
-    soup = BeautifulSoup(browser.page_source, 'lxml')
+    soup = BeautifulSoup(browser.page_source, "lxml")
 
     # Название, описание, количество отзывов в информационном блоке, поиск блока отзывов
     try:
-        metaBlock = soup.find('div', class_='productPage__meta')
+        metaBlock = soup.find("div", class_="productPage__meta")
         if metaBlock:
-            logging.info(f'Обработка мета блока')
+            logging.info(f"Обработка мета блока")
 
-            title = soup.find('h1', class_='productPage__title')
+            title = soup.find("h1", class_="productPage__title")
             if title:
                 title = title.text
-                logging.info(f'{title}')
+                logging.info(f"{title}")
             else:
-                logging.info(f'Название не найдено')
+                logging.info(f"Название не найдено")
 
-            description = soup.find('div', class_='productPage__overview_text m_hidden js_overview_full')
+            description = soup.find(
+                "div", class_="productPage__overview_text m_hidden js_overview_full"
+            )
             if description:
                 description = description.text
-                logging.info(f'Описание найдено')
+                logging.info(f"Описание найдено")
             else:
-                logging.info(f'Описание не найдено')
-            
-            metaBlock_items = metaBlock.find_all('div', class_='productPage__meta_item')
-            review_count = int(metaBlock_items[3].find('div', class_='productPage__meta_value').text)
+                logging.info(f"Описание не найдено")
+
+            metaBlock_items = metaBlock.find_all("div", class_="productPage__meta_item")
+            review_count = int(
+                metaBlock_items[3].find("div", class_="productPage__meta_value").text
+            )
 
             if review_count == 0:
-                logging.info(f'Нет отзывов')
+                logging.info(f"Нет отзывов")
                 browser.close()
                 COUNT_BUF += 1
                 continue
             else:
-                logging.info(f'Отзывов в мета блоке {review_count}')
+                logging.info(f"Отзывов в мета блоке {review_count}")
         else:
-            logging.info(f'Мета блок не найден (что?)')
-        
+            logging.info(f"Мета блок не найден (что?)")
+
         WebDriverWait(browser, 5).until(
             EC.presence_of_element_located((By.CLASS_NAME, "productWatches__list"))
         )
-        logging.info('Блок отзывов найден')
+        logging.info("Блок отзывов найден")
     except Exception as e:
-        logging.info('Блок меты/отзывов не найден!')
+        logging.info("Блок меты/отзывов не найден!")
         logging.info(e)
         browser.close()
         COUNT_BUF += 1
         continue
 
-    soup = BeautifulSoup(browser.page_source, 'lxml')
+    soup = BeautifulSoup(browser.page_source, "lxml")
 
     # Прогружаем все (почти) отзывы
-    preloader = soup.find('div', class_='preloader m_big')
+    preloader = soup.find("div", class_="preloader m_big")
     while preloader:
-        browser.find_element(By.TAG_NAME,'body').send_keys(Keys.END)
-        soup = BeautifulSoup(browser.page_source, 'lxml')
-        preloader = soup.find('div', class_='preloader m_big')
+        browser.find_element(By.TAG_NAME, "body").send_keys(Keys.END)
+        soup = BeautifulSoup(browser.page_source, "lxml")
+        preloader = soup.find("div", class_="preloader m_big")
 
-    productWatches_list = soup.find('div', class_='productWatches__list js_list')
-    reviews = productWatches_list.find_all('div', class_='productWatches__item_info')
+    productWatches_list = soup.find("div", class_="productWatches__list js_list")
+    reviews = productWatches_list.find_all("div", class_="productWatches__item_info")
 
-    if reviews: logging.info(f'Были найдены отзывы в количестве {len(reviews)} шт.')
+    if reviews:
+        logging.info(f"Были найдены отзывы в количестве {len(reviews)} шт.")
 
     for review in reviews:
-        rating = review.find('div', class_='productWatches__item_rate')
-        
+        rating = review.find("div", class_="productWatches__item_rate")
+
         if not rating:
             continue
 
         try:
-            rating = int(rating.get('class')[1][7:])
+            rating = int(rating.get("class")[1][7:])
         except IndexError as e:
-            logging.info('Не удалось извлечь оценку')
+            logging.info("Не удалось извлечь оценку")
             continue
 
-        text_review = review.find('div', class_='productWatches__item_review')
-        if not text_review: continue
+        text_review = review.find("div", class_="productWatches__item_review")
+        if not text_review:
+            continue
 
-        prefix = text_review.find('div', class_='productWatches__item_review_title')
+        prefix = text_review.find("div", class_="productWatches__item_review_title")
         if prefix:
             prefix = prefix.text
-            text_review = text_review.text[len(prefix)+1:]
+            text_review = text_review.text[len(prefix) + 1 :]
         else:
             text_review = text_review.text
-        
+
         new_row = {
-            'Mustapp page ID': i,
-            'Title': title,
-            'Description': description,
-            'Review text': text_review,
-            'Score (out of 10)': rating
+            "Mustapp page ID": i,
+            "Title": title,
+            "Description": description,
+            "Review text": text_review,
+            "Score (out of 10)": rating,
         }
         data.loc[len(data)] = new_row
-    
+
     COUNT_BUF += 1
 
     if COUNT_BUF >= MAX_BUF:
-        data.to_csv(f'presave{COUNT_FLUSHES}_mustapp_reviews_{START_PAGE}-{i}.csv', index=False)
-        logging.info(f'Пресейв №{COUNT_FLUSHES} ({START_PAGE} — {i})')
+        data.to_csv(
+            f"presave{COUNT_FLUSHES}_mustapp_reviews_{START_PAGE}-{i}.csv", index=False
+        )
+        logging.info(f"Пресейв №{COUNT_FLUSHES} ({START_PAGE} — {i})")
         COUNT_FLUSHES += 1
         COUNT_BUF = 0
-    
+
     browser.close()
 
-data.to_csv(f'mustapp_reviews_{START_PAGE}-{MAX_PAGES}.csv', index=False)
+data.to_csv(f"mustapp_reviews_{START_PAGE}-{MAX_PAGES}.csv", index=False)
 
-logging.info(f'Завершение, было добавлено {len(data)} отзывов')
+logging.info(f"Завершение, было добавлено {len(data)} отзывов")
 
 browser.quit()
