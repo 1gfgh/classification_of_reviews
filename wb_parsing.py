@@ -238,16 +238,7 @@ def parse(url: str) -> None:
 
 
 def main():
-    urls = ["https://www.wildberries.ru/catalog/156411600/detail.aspx", "https://www.wildberries.ru/catalog/168158196/detail.aspx", "https://www.wildberries.ru/catalog/84982268/detail.aspx",
-            "https://www.wildberries.ru/catalog/42487229/detail.aspx", "https://www.wildberries.ru/catalog/44587938/detail.aspx", "https://www.wildberries.ru/catalog/35678773/detail.aspx",
-            "https://www.wildberries.ru/catalog/50447526/detail.aspx", "https://www.wildberries.ru/catalog/9512622/detail.aspx", "https://www.wildberries.ru/catalog/95681073/detail.aspx",
-            "https://www.wildberries.ru/catalog/94333394/detail.aspx", "https://www.wildberries.ru/catalog/118814103/detail.aspx", "https://www.wildberries.ru/catalog/226099897/detail.aspx",
-            "https://www.wildberries.ru/catalog/174525702/detail.aspx", "https://www.wildberries.ru/catalog/127684147/detail.aspx", "https://www.wildberries.ru/catalog/168566996/detail.aspx",
-            "https://www.wildberries.ru/catalog/241285405/detail.aspx", "https://www.wildberries.ru/catalog/9090858/detail.aspx", "https://www.wildberries.ru/catalog/148825454/detail.aspx",
-            "https://www.wildberries.ru/catalog/51503671/detail.aspx", "https://www.wildberries.ru/catalog/158087310/detail.aspx", "https://www.wildberries.ru/catalog/75545007/detail.aspx",
-            "https://www.wildberries.ru/catalog/311070245/detail.aspx", "https://www.wildberries.ru/catalog/12023112/detail.aspx", "https://www.wildberries.ru/catalog/29251219/detail.aspx",
-            "https://www.wildberries.ru/catalog/65931166/detail.aspx", "https://www.wildberries.ru/catalog/99949562/detail.aspx", "https://www.wildberries.ru/catalog/244911722/detail.aspx",
-            "https://www.wildberries.ru/catalog/241070430/detail.aspx", "https://www.wildberries.ru/catalog/198711201/detail.aspx", "https://www.wildberries.ru/catalog/141152145/detail.aspx"]
+    urls = []
     for url in urls:
         parse(url)
     return
