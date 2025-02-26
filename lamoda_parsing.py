@@ -24,17 +24,32 @@ def scroll_down(browser, max_scrolls=5, wait_time=2):
 
 def get_product_links(browser):
     """Собирает ссылки на все товары на странице каталога"""
+    
+    logging.info("Начинаем сбор ссылок на товары с текущей страницы...")
+
+    try:
+        WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "a.x-product-card__pic-catalog"))
+        )
+    except:
+        logging.warning("Не найдено товаров на странице!")
+        return []
+
     scroll_down(browser, max_scrolls=5, wait_time=2)
+    
     soup = BeautifulSoup(browser.page_source, "lxml")
     product_links = []
 
-    product_cards = soup.find_all("a", class_="_root_aroml_2 _label_aroml_17")  # Класс ссылки товара
+    product_cards = soup.find_all("a", class_="x-product-card__pic-catalog")
+    if not product_cards:
+        product_cards = soup.find_all("a", class_="_root_aroml_2 _label_aroml_17")
+
     for card in product_cards:
         href = card.get("href")
         if href and href.startswith("/p/"):
             product_links.append(f"https://www.lamoda.ru{href}")
 
-    logging.info(f"Найдено {len(product_links)} товаров")
+    logging.info(f"Найдено {len(product_links)} товаров на странице.")
     return product_links
 
 def GetReviewsSection(browser) -> bool:
@@ -49,7 +64,7 @@ def GetReviewsSection(browser) -> bool:
         WebDriverWait(browser, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "_root_1dixh_6"))
         )
-        logging.info("Отзывы загружены")
+        logging.info("Отзывы загружены!")
         return True
     except Exception as e:
         logging.warning(f"Ошибка при загрузке отзывов: {e}")
@@ -74,13 +89,79 @@ def getAllReviews(browser) -> list[Review]:
 
         reviews.append(Review(review_text=review_text, review_rating=review_rating))
 
-    logging.info(f"Собрано {len(reviews)} отзывов")
+    logging.info(f"Собрано {len(reviews)} отзывов с текущей страницы.")
     return reviews
 
-def parse_product(browser, url):
+def GetGoodName(browser) -> str:
+    """Получает название товара"""
+    try:
+        soup = BeautifulSoup(browser.page_source, "lxml")
+        good_name_tag = soup.find("div", class_="_modelName_mnqvr_21")
+        if good_name_tag:
+            name = good_name_tag.get_text().strip()
+            logging.info(f"Название товара: {name}")
+            return name
+        else:
+            logging.warning("Название товара не найдено")
+            return "Не найдено"
+    except Exception as e:
+        logging.error(f"Ошибка при получении названия: {e}")
+        return "Не найдено"
+
+def GetGoodDescription(browser) -> str:
+    """Получает описание товара"""
+    try:
+        soup = BeautifulSoup(browser.page_source, "lxml")
+        description = soup.find('div', class_="_description_795ct_30")
+        if description:
+            desc = description.get_text().strip()
+            logging.info(f"Описание товара: {desc}")
+            return desc
+        else:
+            logging.warning("Описание товара не найдено")
+            return "Не найдено"
+    except Exception as e:
+        logging.error(f"Ошибка при получении описания: {e}")
+        return "Не найдено"
+
+def UploadReviews(reviews: list[Review], name: str, description: str, append_mode=True) -> None:
+    """Записывает отзывы в CSV каждые 100 штук"""
+    data = pd.DataFrame(columns=["Good's name", "Description", "Review", "Rating"])
+    for review in reviews:
+        data.loc[data.shape[0]] = {
+            "Good's name": name,
+            "Description": description,
+            "Review": review.review_text,
+            "Rating": review.review_rating
+        }
+    
+    filename = "lamoda_reviews.csv"
+    mode = 'a' if append_mode else 'w'
+    header = not os.path.exists(filename) if append_mode else True
+    data.to_csv(filename, mode=mode, index=False, header=header)
+
+    logging.info(f"Сохранено {len(reviews)} отзывов в файл.")
+
+def load_processed_links():
+    """Загружает обработанные ссылки из файла"""
+    if os.path.exists("links.txt"):
+        with open("links.txt", "r") as file:
+            return set(file.read().splitlines())
+    return set()
+
+def save_processed_link(url):
+    """Сохраняет обработанную ссылку в файл"""
+    with open("links.txt", "a") as file:
+        file.write(url + "\n")
+
+def parse_product(browser, url, processed_links):
     """Парсит один товар"""
-    browser.execute_script(f"window.open('{url}', '_blank');")  # Открываем в новой вкладке
-    browser.switch_to.window(browser.window_handles[-1])  # Переключаемся на новую вкладку
+    if url in processed_links:
+        logging.info(f"Товар уже обработан: {url} (пропускаем)")
+        return
+
+    browser.execute_script(f"window.open('{url}', '_blank');")
+    browser.switch_to.window(browser.window_handles[-1])
 
     try:
         logging.info(f"Открываю страницу товара: {url}")
@@ -94,14 +175,15 @@ def parse_product(browser, url):
 
         reviews = []
         if GetReviewsSection(browser):
-            page = 1
             while True:
-                logging.info(f"Собираю отзывы со страницы {page}")
-
                 scroll_down(browser, max_scrolls=2, wait_time=2)
                 new_reviews = getAllReviews(browser)
                 if new_reviews:
                     reviews.extend(new_reviews)
+
+                    if len(reviews) >= 100:
+                        UploadReviews(reviews, good_name, good_description, append_mode=True)
+                        reviews.clear()
 
                 try:
                     next_button = WebDriverWait(browser, 5).until(
@@ -109,21 +191,19 @@ def parse_product(browser, url):
                     )
                     next_button.click()
                     time.sleep(3)
-                    page += 1
                 except:
-                    logging.info("Кнопка 'Следующая страница' больше не доступна.")
+                    logging.info("Достигли последней страницы отзывов")
                     break
 
-        UploadReviews(reviews, good_name, good_description, append_mode=True)
+        if reviews:
+            UploadReviews(reviews, good_name, good_description, append_mode=True)
 
-        logging.info(f"Парсинг завершён для товара: {good_name}")
-
+        save_processed_link(url)
     except Exception as e:
         logging.error(f"Ошибка при парсинге товара {url}: {e}")
-
     finally:
-        browser.close()  # Закрываем вкладку
-        browser.switch_to.window(browser.window_handles[0])  # Возвращаемся в каталог
+        browser.close()
+        browser.switch_to.window(browser.window_handles[0])
 
 def parse_catalog(url):
     """Парсит все товары со страницы каталога"""
@@ -134,44 +214,33 @@ def parse_catalog(url):
     browser = webdriver.Chrome(options=options)
     browser.set_page_load_timeout(180)
 
+    processed_links = load_processed_links()
+
     try:
-        logging.info(f"Открываю страницу каталога: {url}")
         browser.get(url)
         time.sleep(3)
 
         while True:
             product_links = get_product_links(browser)
-
             for product_url in product_links:
-                parse_product(browser, product_url)
+                parse_product(browser, product_url, processed_links)
 
-            # Скроллим страницу перед поиском кнопки "Дальше"
             scroll_down(browser, max_scrolls=3, wait_time=2)
 
             try:
                 next_button = WebDriverWait(browser, 5).until(
-                    EC.element_to_be_clickable((By.CLASS_NAME, "_nextPage_6v5hm_74"))
+                    EC.element_to_be_clickable((By.CLASS_NAME, "icon_pagination-arrow-right-black"))
                 )
                 next_button.click()
                 time.sleep(3)
             except:
-                logging.info("Кнопка 'Дальше' больше не доступна.")
+                logging.info("Достигли последней страницы каталога")
                 break
-
-    except Exception as e:
-        logging.error(f"Ошибка при парсинге каталога {url}: {e}")
-
     finally:
         browser.quit()
 
 def main():
-    catalog_urls = [
-        "https://www.lamoda.ru/c/4151/clothes-muzhskie-bryuki/",
-        "https://www.lamoda.ru/c/4152/clothes-muzhskie-futbolki/",
-        "https://www.lamoda.ru/c/4153/clothes-muzhskie-dzhinsy/",
-    ]
-    for url in catalog_urls:
-        parse_catalog(url)
+    parse_catalog("https://www.lamoda.ru/c/15/shoes-women/?sitelink=topmenuW&l=4")
 
 if __name__ == "__main__":
     main()
