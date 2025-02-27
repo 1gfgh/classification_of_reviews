@@ -75,13 +75,13 @@ def getAllReviews(browser) -> list[Review]:
         return None
 
     soup = BeautifulSoup(browser.page_source, "lxml")
-    review_elements = soup.find_all('div', class_="feedback__content")
-    rating_elements = soup.find_all('div', class_="feedback__info")
+    review_elements = soup.find_all("div", class_="feedback__content")
+    rating_elements = soup.find_all("div", class_="feedback__info")
     
     if review_elements and rating_elements:
         reviews = []
         for review, rating in zip(review_elements, rating_elements):
-            review_text = review.find("p", class_="feedback__text")
+            review_text = review.find('p', class_="feedback__text")
             review_rating = rating.find("span", class_="feedback__rating")
             if review_text:
                 reviews.append(Review(
@@ -168,6 +168,14 @@ def UploadReviews(reviews: list[Review], name: str, description: str) -> None:
 
 def parse(url: str) -> None:
     try:
+        with open("links.txt", 'r') as file:
+            if url in file.read():
+                logging.error(f"{url} is already processed!")
+                return
+    except FileNotFoundError:
+        logging.fatal("No file 'links.txt' to save ur link!")
+        return
+    try:
         with open("links.txt", 'a') as file:
             file.write(f"{url}\n")
         logging.info("Link has been saved!")
@@ -237,10 +245,50 @@ def parse(url: str) -> None:
     browser.quit()
 
 
-def main():
+def getUrls() -> list[str]:
+    url = "https://www.wildberries.ru"
+    options = webdriver.ChromeOptions()
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-setuid-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--start-maximized")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--remote-debugging-port=9230")
+    browser = webdriver.Chrome(options=options)
+    browser.get(url) 
+    try:
+        WebDriverWait(browser, 30).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "product-card__wrapper"))
+        )
+        logging.info("Goods were found")
+    except Exception as e:
+        logging.warning("Goods were not found")
+        return None
+    soup = BeautifulSoup(browser.page_source, "lxml")
+    goods = soup.find_all('a', class_="product-card__link j-card-link j-open-full-product-card")
     urls = []
-    for url in urls:
-        parse(url)
+    start_time = time.time()
+    time_limit = 300
+    for good in goods:
+        logging.info(f"""Found new good: {good.get("href")}""")
+        urls.append(good.get("href"))
+        if time.time() > start_time + time_limit:
+            break
+    browser.stop_client()
+    browser.close()
+    browser.quit()
+    return urls
+
+
+def main():
+    start_time = time.time()
+    time_limit = 3600
+    while time.time() - start_time < time_limit:
+        logging.info("Start of the new interation")
+        urls = getUrls()
+        for url in urls:
+            parse(url)
     return
 
 
