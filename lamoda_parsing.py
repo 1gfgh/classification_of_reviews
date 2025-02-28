@@ -205,8 +205,7 @@ def parse_product(browser, url, processed_links):
         browser.close()
         browser.switch_to.window(browser.window_handles[0])
 
-def parse_catalog(url):
-    """Парсит все товары со страницы каталога"""
+def parse_catalog(url, n):
     options = webdriver.ChromeOptions()
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
@@ -226,21 +225,14 @@ def parse_catalog(url):
                 parse_product(browser, product_url, processed_links)
 
             scroll_down(browser, max_scrolls=3, wait_time=2)
-
-            try:
-                next_button = WebDriverWait(browser, 5).until(
-                    EC.element_to_be_clickable((By.CLASS_NAME, "icon_pagination-arrow-right-black"))
-                )
-                next_button.click()
-                time.sleep(3)
-            except:
-                logging.info("Достигли последней страницы каталога")
-                break
+            logging.info(f"страница номер {n} готова")
+            break
     finally:
         browser.quit()
 
 def main():
-    parse_catalog("https://www.lamoda.ru/c/15/shoes-women/?sitelink=topmenuW&l=4")
+    for i in range(1, 100):
+        parse_catalog(f"https://www.lamoda.ru/c/4152/default-men/?is_sale=1&display_locations=outlet&sitelink=topmenuM&l=12&page={i}", i)
 
 if __name__ == "__main__":
     main()
