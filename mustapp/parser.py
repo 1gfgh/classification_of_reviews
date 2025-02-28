@@ -12,8 +12,6 @@ import logging
 
 import time
 
-# TODO: flake8 + black
-
 # logging.basicConfig(level=logging.INFO, filename="logs.log",filemode="w")
 logging.basicConfig(level=logging.INFO)
 
@@ -26,9 +24,9 @@ https://mustapp.com/p/i
 """
 
 # ======================  Настройка тут  ======================
-START_PAGE = 1  # понятно
-MAX_PAGES = 1000  # ну понятно
-MAX_BUF = 200  # каждые MAX_BUF страниц делать пресейв
+START_PAGE = 11001  # понятно
+MAX_PAGES = 12000  # ну понятно
+MAX_BUF = 2000  # каждые MAX_BUF страниц делать пресейв
 # =============================================================
 
 COUNT_BUF = 0
@@ -107,9 +105,9 @@ for i in range(START_PAGE, MAX_PAGES + 1):
             EC.presence_of_element_located((By.CLASS_NAME, "productWatches__list"))
         )
         logging.info("Блок отзывов найден")
-    except Exception as e:
+    except Exception: #as e:
         logging.info("Блок меты/отзывов не найден!")
-        logging.info(e)
+        # logging.info(e)
         browser.close()
         COUNT_BUF += 1
         continue
@@ -117,8 +115,9 @@ for i in range(START_PAGE, MAX_PAGES + 1):
     soup = BeautifulSoup(browser.page_source, "lxml")
 
     # Прогружаем все (почти) отзывы
+    start_time = time.time()
     preloader = soup.find("div", class_="preloader m_big")
-    while preloader:
+    while (preloader and (time.time() - start_time < 20)):
         browser.find_element(By.TAG_NAME, "body").send_keys(Keys.END)
         soup = BeautifulSoup(browser.page_source, "lxml")
         preloader = soup.find("div", class_="preloader m_big")
