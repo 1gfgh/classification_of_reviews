@@ -225,7 +225,6 @@ def parse(url: str) -> None:
                 break
             last_height = new_height
         reviews = getAllReviews(browser)
-        print(type(reviews))
         if reviews:
             print("\n" + "="*50)
             print(f"Found {len(reviews)} reviews:")
@@ -239,7 +238,8 @@ def parse(url: str) -> None:
             print("\nNo reviews found")
     else:
         logging.warning("Could not find review URL")
-    UploadReviews(reviews, good_name, good_description)
+    if reviews:
+        UploadReviews(reviews, good_name, good_description)
     browser.stop_client()
     browser.close()
     browser.quit()
