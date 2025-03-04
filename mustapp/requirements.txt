@@ -1,0 +1,8 @@
+bs4
+lxml
+selenium
+pandas
+matplotlib
+seaborn
+langdetect
+logging
