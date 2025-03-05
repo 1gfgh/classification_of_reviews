@@ -231,8 +231,8 @@ def parse_catalog(url, n):
         browser.quit()
 
 def main():
-    for i in range(20, 100):
-        parse_catalog(f"https://www.lamoda.ru/c/15/shoes-women/?sitelink=topmenuW&l=4&page={i}", i)
+    for i in range(1, 100):
+        parse_catalog(f"https://www.lamoda.ru/c/647/hats-golovnyeubory/?sitelink=topmenuW&l=3&page={i}", i)
 
 if __name__ == "__main__":
     main()
