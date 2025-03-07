@@ -2,7 +2,11 @@ bs4
 lxml
 selenium
 pandas
+numpy==1.26.4
 matplotlib
 seaborn
 langdetect
 logging
+tf-keras
+torch
+transformers
