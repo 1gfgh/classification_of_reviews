@@ -5,7 +5,7 @@ This dataset is created for analyzing reviews, providing insights into user feed
 
 ## Columns
 
-### 1. `Good's name`
+### 1. `Name`
 - **Type:** String
 - **Description:** The name of the product or good being reviewed. This helps associate reviews with specific items.
 
