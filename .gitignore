@@ -3,4 +3,5 @@ output.txt
 .DS_Store
 *.csv
 __pycache__
+pg_data
 
