@@ -8,6 +8,7 @@ import asyncio
 from asyncpg import Pool
 from contextlib import asynccontextmanager
 from typing import Annotated
+from rsa import decrypt
 
 
 pool: Pool = None
@@ -54,12 +55,21 @@ async def register(
         return True
     else:
         raise HTTPException(status_code=423, detail="Login already in use")
+    
 
-
-@app.get("/test_db")
-async def test_db(db=Depends(get_connection)):
-    users = await db.fetch("SELECT * FROM classification_review.users")
-    return [dict(user) for user in users]
+@app.get("/login")
+async def login(
+        login: Annotated[str, Form()],
+        password: Annotated[UploadFile, File()],
+        db=Depends(get_connection)
+    ) -> bool:
+    user = await db.fetchrow("Select * from classification_review.users where login = $1", login)
+    if user is None: 
+        raise HTTPException(status_code=404, detail="Login not found")
+    read_password = await password.read()
+    read_password = decrypt(read_password, constants.privkey)
+    correct_password = decrypt(user["password"], constants.privkey)
+    return (read_password == correct_password)
 
 
 if __name__ == "__main__":
