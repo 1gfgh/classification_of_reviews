@@ -4,4 +4,3 @@ output.txt
 *.csv
 __pycache__
 pg_data
-
