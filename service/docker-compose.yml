@@ -8,23 +8,21 @@ services:
     ports:
       - "1233:1233"
     depends_on:
-      db:
-        condition: service_healthy 
+      pgdb:
+        condition: service_healthy
     environment:
-      - DSN=postgresql://postgres:postgres@db:5432/reviews_db  
+      - DSN=postgresql://postgres:postgres@pgdb:5432/reviews_db
 
-
-  db:
-    image: postgres:15
-    container_name: postgres-db
-    restart: always
+  pgdb:
+    image: postgres:16
+    container_name: postgres_reviews
+    restart: unless-stopped
     environment:
+      POSTGRES_DB: reviews_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: reviews_db
-      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "15432:5432" 
+      - "15432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -32,6 +30,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 15
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.localdomain
+      PGADMIN_DEFAULT_PASSWORD: password
+      PGADMIN_LISTEN_ADDRESS: 0.0.0.0
+      PGADMIN_DISABLE_POSTFIX: 1
+    ports:
+      - "5445:80"
+    depends_on:
+      pgdb:
+        condition: service_healthy
 
 volumes:
   pgdata:
