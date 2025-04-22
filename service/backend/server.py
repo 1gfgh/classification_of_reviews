@@ -7,6 +7,7 @@ import asyncpg
 import asyncio
 from asyncpg import Pool
 from contextlib import asynccontextmanager
+from typing import Annotated
 
 
 pool: Pool = None
@@ -16,14 +17,6 @@ app = FastAPI()
 async def get_connection():
     async with pool.acquire() as conn:
         yield conn
-
-
-async def get_pool() -> Pool:
-    return await asyncpg.create_pool(
-        dsn=constants.DSN,
-        min_size=5, 
-        max_size=20
-    )
 
 
 @asynccontextmanager
@@ -40,6 +33,27 @@ async def lifespan(app: FastAPI):
 
 app.router.lifespan_context = lifespan
 
+
+@app.post("/register")
+async def register(
+        name: Annotated[str, Form()],
+        login: Annotated[str, Form()],
+        password: Annotated[UploadFile, File()],
+        db=Depends(get_connection)
+    ) -> bool:
+    read_password = await password.read()
+    user = await db.fetchrow("Select * from classification_review.users where login = $1", login)
+    if user is None: 
+        await db.execute(
+            """
+            INSERT INTO classification_review.users (name, login, password) VALUES
+            ($1, $2, $3)
+            """,
+            name, login, read_password
+        )
+        return True
+    else:
+        raise HTTPException(status_code=423, detail="Login already in use")
 
 
 @app.get("/test_db")
