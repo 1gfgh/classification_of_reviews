@@ -50,13 +50,13 @@ if data_id:
     # Загружаем данные по data_id
     # Показываем предсказания
 else:
-    uploaded_file = st.file_uploader(f"Загрузите CSV-файл с отзывами (колонка '{requirement}' обязательна)", type=["csv"])
+    uploaded_file = st.file_uploader(f"Загрузите CSV-файл с отзывами (колонка {requirement} обязательна)", type=["csv"])
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     
     if requirement not in df.columns:
-        st.error(f"В файле нет колонки '{requirement}'!")
+        st.error(f"В файле нет колонки {requirement}!")
     else:
         st.markdown(
             '<div class="custom-success">Файл успешно загружен!</div>',
@@ -67,13 +67,12 @@ if uploaded_file is not None:
 
         with st.spinner("Идёт классификация это может занять некоторое время..."):
             predictions = placeholder(df[requirement].tolist())
+            df["Sentiment"] = predictions
         
-        df["Sentiment"] = predictions
         st.markdown(
             '<div class="custom-success">Метки предсказаны!</div>',
             unsafe_allow_html=True
         )
-
         st.write(" ")
 
         with st.spinner("Создание CSV с метками..."):
