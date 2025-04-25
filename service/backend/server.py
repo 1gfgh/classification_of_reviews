@@ -1,6 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Body, Depends
-from fastapi.responses import FileResponse
-from fastapi.logger import logger
+from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Depends
 import uvicorn
 from io import BytesIO
 import constants
@@ -15,6 +13,7 @@ import pandas as pd
 import os
 import boto3
 from dotenv import load_dotenv
+import gdown
 
 
 load_dotenv()
@@ -22,6 +21,12 @@ pool: Pool = None
 app = FastAPI()
 with open(constants.path_model_wb, "rb") as f:
     model_wb = pickle.load(f)
+with open(constants.path_model_lamoda, "rb") as f:
+    model_lamoda = pickle.load(f)
+with open(constants.path_model_mustapp, "rb") as f:
+    model_mustapp = pickle.load(f)
+with open(constants.path_model_both, "rb") as f:
+    model_both = pickle.load(f)
 
 
 async def get_connection():
@@ -88,9 +93,10 @@ async def predict_async(model, data):
     return await loop.run_in_executor(None, lambda: model.predict(data))
 
 
-@app.post("/predict/csv/{model}")
+@app.post("/predict/{data_type}/{model}")
 async def get_predict(
         model: str,
+        data_type: str,
         login: Annotated[str, Form()],
         data_csv: Annotated[UploadFile, File()], 
         db=Depends(get_connection)
@@ -99,12 +105,24 @@ async def get_predict(
     if user is None: 
         raise HTTPException(status_code=404, detail="Login not found")
     content = await data_csv.read()
-    data = pd.read_csv(BytesIO(content))
+    match data_type:
+        case "csv":
+            data = pd.read_csv(BytesIO(content))
+        case "excel":
+            data = pd.read_excel(BytesIO(content))
+        case _:
+            raise HTTPException(status_code=404, detail="Data type not found")
     if "Review" not in data.columns:
         raise HTTPException(status_code=422, detail="Review column not found")
     match model:
         case "goods":
             y_pred = await predict_async(model_wb, data["Review"])
+        case "clothes":
+            y_pred = await predict_async(model_lamoda, data["Review"])
+        case "films":
+            y_pred = await predict_async(model_mustapp, data["Review"])
+        case "goods-and-clothes":
+            y_pred = await predict_async(model_both, data["Review"])
         case _:
             raise HTTPException(status_code=404, detail="Model not found")
     data["predict"] = y_pred
