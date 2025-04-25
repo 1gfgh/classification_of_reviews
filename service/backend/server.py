@@ -100,6 +100,8 @@ async def get_predict(
         raise HTTPException(status_code=404, detail="Login not found")
     content = await data_csv.read()
     data = pd.read_csv(BytesIO(content))
+    if "Review" not in data.columns:
+        raise HTTPException(status_code=422, detail="Review column not found")
     match model:
         case "wb":
             y_pred = await predict_async(model_wb, data["Review"])
