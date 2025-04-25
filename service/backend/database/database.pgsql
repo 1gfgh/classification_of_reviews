@@ -1,6 +1,6 @@
 create schema if not exists classification_reviews;
 
-drop table if exists classification_reviews.users;
+drop table if exists classification_reviews.users cascade;
 
 create table if not exists classification_reviews.users (
     name VARCHAR(50),
@@ -12,7 +12,8 @@ drop table if exists classification_reviews.predicts;
 
 create table if not exists classification_reviews.predicts (
     id serial PRiMARY KEY,
-    owner VARCHAR(50) NOT NULL,
+    owner VARCHAR(50) NOT NULL REFERENCES classification_reviews.users(login)
+    ON DELETE cascade,
     used_model VARCHAR(50) NOT NULL,
     predict_date DATE NOT NULL
 );
