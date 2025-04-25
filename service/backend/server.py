@@ -103,7 +103,7 @@ async def get_predict(
     if "Review" not in data.columns:
         raise HTTPException(status_code=422, detail="Review column not found")
     match model:
-        case "wb":
+        case "goods":
             y_pred = await predict_async(model_wb, data["Review"])
         case _:
             raise HTTPException(status_code=404, detail="Model not found")
