@@ -61,6 +61,12 @@ def preprocess_text(text):
     text = re.sub(r'[^\w\s]', '', text)
     return text
 
+def selector_formatter(raw_input):
+    if raw_input == "goods": return "Товары"
+    if raw_input == "clothes": return "Одежда"
+    if raw_input == "films": return "Фильмы"
+    if raw_input == "goods-and-clothes": return "Товары и одежда"
+
 st.markdown("""
     <style>
         .custom-success {
@@ -80,10 +86,11 @@ else:
     if not model:
         model = st.selectbox(
             "Выберите модель",
-            ("wb"),
+            ("goods", "clothes", "films", "goods-and-clothes"),
+            format_func=selector_formatter
         )
     st.write(f"Пользователь {login}, модель {model}")
-    uploaded_file = st.file_uploader(f"Загрузите CSV-файл с отзывами (колонка {requirement} обязательна)", type=["csv"])
+    uploaded_file = st.file_uploader(f"Загрузите CSV-файл с отзывами (колонка {requirement} обязательна)", type=["csv", "xls", "xlsx", "xlsm", "xlsb", "odf", "ods", "odt"])
 
 if uploaded_file is not None:
     with st.spinner("Получение файла..."):
