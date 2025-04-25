@@ -2,7 +2,7 @@ import os
 import asyncio
 from io import BytesIO
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, List
 
 import asyncpg
 import boto3
@@ -155,6 +155,22 @@ async def get_predict(
     s3.upload_fileobj(csv_buffer, "classification.reviews", f"{user['login']}_{predict_id}.csv")
 
     return predict_id
+
+
+@app.get("/get_history")
+async def get_history(
+        login: Annotated[str, Form()], 
+        db=Depends(get_connection)
+    ) -> List[int]:
+    user = await db.fetchrow("Select * from classification_reviews.users where login = $1", login)
+    if user is None: 
+        raise HTTPException(status_code=404, detail="Login not found")
+    
+    query = """ Select id from classification_reviews.predicts
+            Where owner = $1
+            """
+    predicts = await db.fetch(query, login)
+    return [predict["id"] for predict in predicts]
 
 
 if __name__ == "__main__":
