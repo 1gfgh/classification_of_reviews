@@ -1,19 +1,21 @@
-from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Depends
-import uvicorn
-from io import BytesIO
-import constants
-import asyncpg
+import os
 import asyncio
-from asyncpg import Pool
+from io import BytesIO
 from contextlib import asynccontextmanager
 from typing import Annotated
-from rsa import decrypt, PrivateKey
+
+import asyncpg
+import boto3
 import pickle
 import pandas as pd
-import os
-import boto3
+import rsa
 from dotenv import load_dotenv
-import gdown
+import uvicorn
+
+from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Depends
+from asyncpg import Pool
+from rsa import decrypt, PrivateKey
+import constants
 
 
 load_dotenv()
@@ -104,16 +106,22 @@ async def get_predict(
     user = await db.fetchrow("Select * from classification_reviews.users where login = $1", login)
     if user is None: 
         raise HTTPException(status_code=404, detail="Login not found")
+    
     content = await data_csv.read()
-    match data_type:
-        case "csv":
-            data = pd.read_csv(BytesIO(content))
-        case "excel":
-            data = pd.read_excel(BytesIO(content))
-        case _:
-            raise HTTPException(status_code=404, detail="Data type not found")
+    try:
+        match data_type:
+            case "csv":
+                data = pd.read_csv(BytesIO(content))
+            case "excel":
+                data = pd.read_excel(BytesIO(content))
+            case _:
+                raise HTTPException(status_code=404, detail="Data type not found")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error reading {data_type} file: {str(e)}")
+        
     if "Review" not in data.columns:
         raise HTTPException(status_code=422, detail="Review column not found")
+    
     match model:
         case "goods":
             y_pred = await predict_async(model_wb, data["Review"])
@@ -147,7 +155,6 @@ async def get_predict(
     s3.upload_fileobj(csv_buffer, "classification.reviews", f"{user['login']}_{predict_id}.csv")
 
     return predict_id
-
 
 
 if __name__ == "__main__":
