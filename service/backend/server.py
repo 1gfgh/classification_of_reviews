@@ -1,8 +1,10 @@
 import os
 import asyncio
+import time
+import datetime
 from io import BytesIO
 from contextlib import asynccontextmanager
-from typing import Annotated, List
+from typing import Annotated, List, Tuple
 
 import asyncpg
 import boto3
@@ -135,11 +137,11 @@ async def get_predict(
             raise HTTPException(status_code=404, detail="Model not found")
     data["predict"] = y_pred
     query = """
-            INSERT INTO classification_reviews.predicts (owner, used_model) VALUES
-            ($1, $2)
+            INSERT INTO classification_reviews.predicts (owner, used_model, predict_date) VALUES
+            ($1, $2, $3)
             RETURNING id;
             """
-    predict_id = await db.fetchval(query, user["login"], model)
+    predict_id = await db.fetchval(query, user["login"], model, datetime.date.fromtimestamp(time.time()))
 
     csv_buffer = BytesIO()
     data.to_csv(csv_buffer, index=False)
@@ -161,16 +163,16 @@ async def get_predict(
 async def get_history(
         login: Annotated[str, Form()], 
         db=Depends(get_connection)
-    ) -> List[int]:
+    ) -> List[Tuple[int, datetime.date]]:
     user = await db.fetchrow("Select * from classification_reviews.users where login = $1", login)
     if user is None: 
         raise HTTPException(status_code=404, detail="Login not found")
     
-    query = """ Select id from classification_reviews.predicts
+    query = """ Select id, predict_date from classification_reviews.predicts
             Where owner = $1
             """
     predicts = await db.fetch(query, login)
-    return [predict["id"] for predict in predicts]
+    return [(predict["id"], predict["predict_date"]) for predict in predicts]
 
 
 if __name__ == "__main__":
