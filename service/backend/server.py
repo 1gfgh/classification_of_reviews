@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, List, Tuple
 import logging
 from pathlib import Path
-
+import numpy as np
 import asyncpg
 import boto3
 import pickle
@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Depends
 from asyncpg import Pool
 from rsa import decrypt, PrivateKey
 import constants
+from parsers.parser_must import parser_must
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -123,8 +124,36 @@ async def login(
         logger.warning(f"Login failed - incorrect password for user {login}")
     return result
 
-async def predict_async(model, data):
+async def predict_async(model_name: str, data: pd.Series, login: str = None) -> np.ndarray:
     loop = asyncio.get_running_loop()
+    
+    async def get_model():
+        match model_name:
+            case "goods":
+                return model_wb
+            case "clothes":
+                return model_lamoda
+            case "films":
+                return model_mustapp
+            case "goods-and-clothes":
+                return model_both
+            case _:
+                try:
+                    model_id = int(model_name)
+                    if model_id <= 0:
+                        logger.warning(f"Invalid model number: {model_id} - must be positive")
+                        raise HTTPException(status_code=422, detail="Model number must be positive")
+                except ValueError:
+                    logger.warning(f"Invalid model format: {model_name} - must be a number")
+                    raise HTTPException(status_code=422, detail="Model must be a number")
+                
+                try:
+                    return await download_model_from_s3(login, model_id)
+                except Exception as e:
+                    logger.error(f"Error downloading model from S3: {str(e)}")
+                    raise HTTPException(status_code=500, detail=f"Error downloading model from S3: {str(e)}")
+    
+    model = await get_model()
     return await loop.run_in_executor(None, lambda: model.predict(data))
 
 async def download_model_from_s3(login, model_id):
@@ -174,36 +203,66 @@ async def get_predict(
         raise HTTPException(status_code=422, detail="Review column not found")
     
     try:
-        match model:
-            case "goods":
-                y_pred = await predict_async(model_wb, data["Review"])
-            case "clothes":
-                y_pred = await predict_async(model_lamoda, data["Review"])
-            case "films":
-                y_pred = await predict_async(model_mustapp, data["Review"])
-            case "goods-and-clothes":
-                y_pred = await predict_async(model_both, data["Review"])
-            case _:
-                try:
-                    model_id = int(model)
-                    if model_id <= 0:
-                        logger.warning(f"Invalid model number: {model_id} - must be positive")
-                        raise HTTPException(status_code=422, detail="Model number must be positive")
-                except ValueError:
-                    logger.warning(f"Invalid model format: {model} - must be a number")
-                    raise HTTPException(status_code=422, detail="Model must be a number")
-                try:
-                    user_model = await download_model_from_s3(login, model_id)
-                    y_pred = await predict_async(user_model, data["Review"])
-                except Exception as e:
-                    logger.error(f"Error downloading model from S3: {str(e)}")
-                    raise HTTPException(status_code=500, detail=f"Error downloading model from S3: {str(e)}")
-                model = f"{login}_{model_id}"
+        y_pred = await predict_async(model, data["Review"], login)
+        if model.isdigit():
+            model = f"{login}_{model}"
     except Exception as e:
         logger.error(f"Error during prediction: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
     data["predict"] = y_pred
+    query = """
+            INSERT INTO classification_reviews.predicts (owner, used_model, predict_date) VALUES
+            ($1, $2, $3)
+            RETURNING id;
+            """
+    predict_id = await db.fetchval(query, user["login"], model, datetime.date.today())
+
+    csv_buffer = BytesIO()
+    data.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
+
+    try:
+        session = boto3.session.Session()
+        s3 = session.client(
+            service_name="s3",
+            endpoint_url="https://storage.yandexcloud.net",
+            aws_access_key_id=os.getenv("access_key"),            
+            aws_secret_access_key=os.getenv("secret_access_key")       
+        )
+        s3.upload_fileobj(csv_buffer, "classification.reviews", f"{user['login']}_{predict_id}.csv")
+        logger.info(f"Prediction results uploaded to S3 for user {login}, predict_id {predict_id}")
+    except Exception as e:
+        logger.error(f"Error uploading to S3: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error saving results: {str(e)}")
+
+    return predict_id
+
+@app.post("/predict_by_link/{parser}/{model}")
+async def predict_by_link(
+        model: str,
+        parser: str,
+        link: Annotated[str, Form()],
+        login: Annotated[str, Form()],
+        db=Depends(get_connection)
+    ) -> int:
+    logger.info(f"Prediction request from user {login} using model {model} and link {link}")
+    user = await db.fetchrow("Select * from classification_reviews.users where login = $1", login)
+    if user is None: 
+        logger.warning(f"Prediction failed - user {login} not found")
+        raise HTTPException(status_code=404, detail="Login not found")
+    try:
+        match parser:
+            case "mustapp":
+                data = await parser_must(link)
+                logger.info(f"Data from mustapp parser: {data.head()}")
+            case _:
+                logger.warning(f"Invalid parser: {parser}")
+                raise HTTPException(status_code=404, detail="Parser not found")
+    except Exception as e:
+        logger.error(f"Error during prediction: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+    y_pred = await predict_async(model, data["Review"], login)
     query = """
             INSERT INTO classification_reviews.predicts (owner, used_model, predict_date) VALUES
             ($1, $2, $3)
