@@ -17,3 +17,13 @@ create table if not exists classification_reviews.predicts (
     used_model VARCHAR(50) NOT NULL,
     predict_date DATE NOT NULL
 );
+
+drop table if exists classification_reviews.models;
+
+create table if not exists classification_reviews.models (
+    id serial PRIMARY KEY,
+    owner VARCHAR(50) NOT NULL REFERENCES classification_reviews.users(login)
+    ON DELETE cascade,
+    model_name VARCHAR(50) NOT NULL
+);
+

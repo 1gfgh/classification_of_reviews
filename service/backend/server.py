@@ -19,6 +19,9 @@ from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Depends
 from asyncpg import Pool
 from rsa import decrypt, PrivateKey
 import constants
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
 
 # Configure logging
 log_dir = Path("logs")
@@ -43,6 +46,7 @@ try:
         model_mustapp = pickle.load(f)
     with open(constants.path_model_both, "rb") as f:
         model_both = pickle.load(f)
+    model_user = None
     logger.info("Models loaded successfully")
 except Exception as e:
     logger.error(f"Error loading models: {str(e)}")
@@ -123,6 +127,20 @@ async def predict_async(model, data):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: model.predict(data))
 
+async def download_model_from_s3(login, model_id):
+    session = boto3.session.Session()
+    s3 = session.client(
+        service_name="s3",
+        endpoint_url="https://storage.yandexcloud.net",
+        aws_access_key_id=os.getenv("access_key"),            
+        aws_secret_access_key=os.getenv("secret_access_key")       
+    )
+    s3.download_file("classification.reviews", f"{login}_{model_id}.pkl", f"temp_model_{model_id}.pkl")
+    with open(f"temp_model_{model_id}.pkl", "rb") as f:
+        user_model = pickle.load(f)
+    os.remove(f"temp_model_{model_id}.pkl")
+    return user_model
+
 @app.post("/predict/{data_type}/{model}")
 async def get_predict(
         model: str,
@@ -166,8 +184,21 @@ async def get_predict(
             case "goods-and-clothes":
                 y_pred = await predict_async(model_both, data["Review"])
             case _:
-                logger.warning(f"Invalid model type: {model}")
-                raise HTTPException(status_code=404, detail="Model not found")
+                try:
+                    model_id = int(model)
+                    if model_id <= 0:
+                        logger.warning(f"Invalid model number: {model_id} - must be positive")
+                        raise HTTPException(status_code=422, detail="Model number must be positive")
+                except ValueError:
+                    logger.warning(f"Invalid model format: {model} - must be a number")
+                    raise HTTPException(status_code=422, detail="Model must be a number")
+                try:
+                    user_model = await download_model_from_s3(login, model_id)
+                    y_pred = await predict_async(user_model, data["Review"])
+                except Exception as e:
+                    logger.error(f"Error downloading model from S3: {str(e)}")
+                    raise HTTPException(status_code=500, detail=f"Error downloading model from S3: {str(e)}")
+                model = f"{login}_{model_id}"
     except Exception as e:
         logger.error(f"Error during prediction: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
@@ -217,6 +248,90 @@ async def get_history(
     predicts = await db.fetch(query, login)
     logger.info(f"Retrieved {len(predicts)} predictions for user {login}")
     return [(predict["id"], predict["predict_date"]) for predict in predicts]
+
+async def logreg_fit(data: pd.DataFrame):
+    logreg_model = Pipeline([
+        ('tf', TfidfVectorizer()),
+        ('clf', LogisticRegression(random_state=42))
+    ])
+    logreg_model.fit(data["Review"], data["Sentiment"])
+    return logreg_model
+
+@app.post("/fit/{type}")
+async def fit(
+        type: str,
+        data: Annotated[UploadFile, File()],
+        login: Annotated[str, Form()],
+        model_name: Annotated[str, Form()],
+        db=Depends(get_connection)
+    ) -> int:
+    logger.info(f"Fitting request for type: {type}")
+    content = await data.read()
+    try:
+        match type:
+            case "csv":
+                data = pd.read_csv(BytesIO(content))
+                if "Review" not in data.columns or "Sentiment" not in data.columns:
+                    logger.warning("CSV file missing required columns: Review and/or Sentiment")
+                    raise HTTPException(status_code=400, detail="CSV file must contain 'Review' and 'Sentiment' columns")
+                model_user = await logreg_fit(data)
+                logger.info("User model fitted successfully from input data")
+            case "pkl":
+                model_user = pickle.loads(content)
+                logger.info("User model loaded successfully from pkl file")
+            case _:
+                logger.warning(f"Invalid data type: {type}")
+                raise HTTPException(status_code=404, detail="Data type not found")
+    except Exception as e:
+        logger.error(f"Error reading {type} file: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error reading {type} file: {str(e)}")
+    
+    if model_user is None:
+        logger.warning("User model not loaded")
+        raise HTTPException(status_code=400, detail="Failed to load model")
+    
+    query = """
+            INSERT INTO classification_reviews.models (owner, model_name) VALUES
+            ($1, $2)
+            RETURNING id;
+            """
+    model_id = await db.fetchval(query, login, model_name)
+    buffer = BytesIO()
+    pickle.dump(model_user, buffer)
+    buffer.seek(0)
+    try:
+        session = boto3.session.Session()
+        s3 = session.client(
+            service_name="s3",
+            endpoint_url="https://storage.yandexcloud.net",
+            aws_access_key_id=os.getenv("access_key"),            
+            aws_secret_access_key=os.getenv("secret_access_key")       
+        )
+        s3.upload_fileobj(buffer, "classification.reviews", f"{login}_{model_id}.pkl")
+        logger.info(f"Model uploaded to S3 for user {login}, model_id {model_id}")
+    except Exception as e:
+        logger.error(f"Error uploading to S3: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error saving results: {str(e)}")
+    return model_id
+
+@app.get("/get_models")
+async def get_models(
+        login: Annotated[str, Form()],
+        db=Depends(get_connection)
+    ) -> List[Tuple[int, str]]:
+    logger.info(f"Models request from user: {login}")
+    user = await db.fetchrow("Select * from classification_reviews.users where login = $1", login)
+    if user is None: 
+        logger.warning(f"Models request failed - user {login} not found")
+        raise HTTPException(status_code=404, detail="Login not found")
+    
+    query = """
+            SELECT id, model_name FROM classification_reviews.models
+            WHERE owner = $1
+            """
+    models = await db.fetch(query, login)
+    return [(model["id"], model["model_name"]) for model in models]
+
 
 if __name__ == "__main__":
     logger.info("Starting server")
