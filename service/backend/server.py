@@ -96,7 +96,7 @@ async def register(
         logger.warning(f"Registration failed - login {login} already in use")
         raise HTTPException(status_code=423, detail="Login already in use")
 
-@app.get("/login")
+@app.post("/login")
 async def login(
         login: Annotated[str, Form()],
         password: Annotated[UploadFile, File()],
@@ -200,7 +200,7 @@ async def get_predict(
 
     return predict_id
 
-@app.get("/get_history")
+@app.post("/get_history")
 async def get_history(
         login: Annotated[str, Form()], 
         db=Depends(get_connection)
