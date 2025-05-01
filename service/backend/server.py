@@ -39,14 +39,34 @@ pool: Pool = None
 app = FastAPI()
 
 try:
-    with open(constants.path_model_wb, "rb") as file:
-        model_wb = pickle.load(file)
-    with open(constants.path_model_lamoda, "rb") as file:
-        model_lamoda = pickle.load(file)
-    with open(constants.path_model_mustapp, "rb") as file:
-        model_mustapp = pickle.load(file)
-    with open(constants.path_model_both, "rb") as file:
-        model_both = pickle.load(file)
+    logger.info("Loading base models")
+    session = boto3.session.Session()
+    s3 = session.client(
+        service_name="s3",
+        endpoint_url="https://storage.yandexcloud.net",
+        aws_access_key_id=os.getenv("access_key"),
+        aws_secret_access_key=os.getenv("secret_access_key")
+    )
+    buffer = BytesIO()
+    s3.download_fileobj("classification.reviews", "model_wb.pkl", buffer)
+    buffer.seek(0)
+    model_wb = pickle.load(buffer)
+    buffer.close()
+    buffer = BytesIO()
+    s3.download_fileobj("classification.reviews", "model_lamoda.pkl", buffer)
+    buffer.seek(0)
+    model_lamoda = pickle.load(buffer)
+    buffer.close()
+    buffer = BytesIO()
+    s3.download_fileobj("classification.reviews", "model_mustapp.pkl", buffer)
+    buffer.seek(0)
+    model_mustapp = pickle.load(buffer)
+    buffer.close()
+    buffer = BytesIO()
+    s3.download_fileobj("classification.reviews", "model_wb_and_lamoda.pkl", buffer)
+    buffer.seek(0)
+    model_both = pickle.load(buffer)
+    buffer.close()
     model_user = None
     logger.info("Models loaded successfully")
 except Exception as error:
@@ -184,11 +204,12 @@ async def download_model_from_s3(login: str, model_id: int):
         aws_access_key_id=os.getenv("access_key"),
         aws_secret_access_key=os.getenv("secret_access_key")
     )
-    s3.download_file("classification.reviews",
-                     f"{login}_{model_id}.pkl", f"temp_model_{model_id}.pkl")
-    with open(f"temp_model_{model_id}.pkl", "rb") as file:
-        user_model = pickle.load(file)
-    os.remove(f"temp_model_{model_id}.pkl")
+    buffer = BytesIO()
+    s3.download_fileobj("classification.reviews",
+                        f"{login}_{model_id}.pkl", buffer)
+    buffer.seek(0)
+    user_model = pickle.load(buffer)
+    buffer.close()
     return user_model
 
 
