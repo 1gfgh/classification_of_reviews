@@ -5,8 +5,11 @@ drop table if exists classification_reviews.users cascade;
 create table if not exists classification_reviews.users (
     name VARCHAR(50),
     login VARCHAR(50) PRIMARY KEY,
-    password bytea not null
+    password bytea
 );
+
+INSERT INTO classification_reviews.users (name, login, password) VALUES 
+('guest', 'guest', NULL);
 
 drop table if exists classification_reviews.predicts;
 
