@@ -46,23 +46,30 @@ function showAnimatedAlert(message, type = 'info') {
 }
 
 // model mapping
-function getModelKeyFromText(text) {
+function getModelFromSelection() {
     const map = {
         "Фильмы": "films",
         "Одежда": "clothes",
         "Товары": "goods",
         "Товары и одежда": "goods-and-clothes",
     };
-    return map[text.trim()];
+    const info = document.querySelector('.model-info strong');
+    const selectedText = info.textContent.trim();
+    const customModelId = info.getAttribute("data-model-id");
+    if (!(selectedText in map) && customModelId) {
+        return customModelId;
+    }
+    return map[selectedText];
 }
+
 
 // handle inserted link
 async function handleLinkSubmit() {
     const input = document.getElementById("product-input");
     const link = input.value.trim();
     const login = sessionStorage.getItem("login") || "guest";
-    const modelText = document.querySelector('.model-info strong').textContent;
-    const model = getModelKeyFromText(modelText);
+    const model = getModelFromSelection();
+    const icon = document.getElementById("submit-icon");
 
     const mustappRegex = /^https:\/\/mustapp\.com\/.+/;
     if (!mustappRegex.test(link)) {
@@ -90,6 +97,8 @@ async function handleLinkSubmit() {
         const predictId = await response.json();
         showAnimatedAlert("Анализ успешно запущен", "success");
         window.open(`${STREAMLIT_URL}?login=${encodeURIComponent(login)}&data_id=${predictId}`, "_blank");
+        input.value = "";
+        icon.src = "svgs/upload.svg";
     } catch (err) {
         showAnimatedAlert(`Ошибка: ${err.message}`, "error");
     } finally {
@@ -181,7 +190,7 @@ function openHistoryPopup(historyItems) {
     });
 }
 
-// API
+// API interaction
 async function register(name, login, password) {
     const formData = new FormData();
     formData.append('name', name);
@@ -218,8 +227,10 @@ async function loginUser(login, password) {
         });
 
         if (response.ok) {
+            showAnimatedAlert('Успешный вход в аккаунт!', 'success');
             sessionStorage.setItem('login', login);
             changeHeaderToLoggedIn();
+            checkForUserModels(login);
         } else {
             const error = await response.json();
             showAnimatedAlert('Ошибка входа: ' + error.detail, 'error');
@@ -230,12 +241,37 @@ async function loginUser(login, password) {
     }
 }
 
+async function checkForUserModels(login) {
+    try {
+        const formData = new FormData();
+        formData.append("login", login);
+
+        const response = await fetch(`${API_BASE_URL}/get_models`, {
+            method: "POST",
+            body: formData,
+        });
+
+        if (!response.ok) {
+            console.warn("Не удалось загрузить пользовательские модели");
+            return;
+        }
+
+        const models = await response.json();
+        if (models.length > 0) {
+            addUserModelOption(models);
+        }
+    } catch (err) {
+        console.error("Ошибка при загрузке пользовательских моделей", err);
+    }
+}
+
 async function fetchHistory() {
     const login = sessionStorage.getItem('login');
     const formData = new FormData();
     formData.append('login', login);
 
     try {
+        document.getElementById("loading-overlay").classList.remove("hidden");
         const response = await fetch(`${API_BASE_URL}/get_history`, {
             method: 'POST',
             body: formData
@@ -251,17 +287,46 @@ async function fetchHistory() {
     } catch (error) {
         showAnimatedAlert('Ошибка сети при получении истории', 'error');
         console.error(error);
+    } finally {
+        document.getElementById("loading-overlay").classList.add("hidden");
     }
 }
+
+// last uploaded user model button
+function addUserModelOption(models) {
+    const lastModel = models[models.length - 1];
+    const [modelId, modelName] = lastModel;
+    const selector = document.querySelector('.model-selector');
+    const button = document.createElement('button');
+
+    button.className = 'model-btn';
+    button.setAttribute('data-model-id', modelId);
+    button.textContent = `${modelName}`;
+    button.addEventListener('click', () => {
+        document.querySelectorAll('.model-btn').forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+
+        const info = document.querySelector('.model-info strong');
+        info.textContent = `${modelName}`;
+        info.setAttribute('data-model-id', modelId);
+    });
+    selector.appendChild(button);
+}
+
 
 // update header after login
 function changeHeaderToLoggedIn() {
     const headerRight = document.querySelector('header .header-right');
     headerRight.innerHTML = `
+        <p id="upload-user-model-btn">Загрузить модель</p>
         <p id="history-btn">История</p>
         <p id="logout-btn">Выйти</p>
     `;
 
+    const login = sessionStorage.getItem('login');
+    document.getElementById('upload-user-model-btn').addEventListener('click', () => {
+        window.open(`${STREAMLIT_URL}/upload?login=${encodeURIComponent(login)}`, "_blank");
+    });
     document.getElementById('history-btn').addEventListener('click', fetchHistory);
     document.getElementById('logout-btn').addEventListener('click', () => {
         sessionStorage.removeItem('login');
@@ -279,3 +344,8 @@ document.addEventListener('DOMContentLoaded', () => {
         changeHeaderToLoggedIn();
     }
 });
+
+// reload with active login session must not truncate user model button
+if (sessionStorage.getItem("login")) {
+    checkForUserModels(sessionStorage.getItem("login"))
+}
