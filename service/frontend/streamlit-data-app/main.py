@@ -168,39 +168,44 @@ if uploaded_file is not None:
 
             try:
                 logger.info("Analys result")
-                st.subheader("Распределение предсказаний")
-                with st.spinner("Анализируем..."):
-                    fig1, ax1 = plt.subplots()
-                    df["Sentiment"].value_counts().plot(kind="pie", colors=["#A476F3", "#FFFFFF"], autopct="%1.1f%%", startangle=90, ax=ax1)
-                    ax1.set_ylabel("")
-                    st.pyplot(fig1)
+                if not df.empty:
+                    st.subheader("Распределение предсказаний")
+                    with st.spinner("Анализируем..."):
+                        fig1, ax1 = plt.subplots()
+                        df["Sentiment"].value_counts().plot(kind="pie", colors=["#A476F3", "#FFFFFF"], autopct="%1.1f%%", startangle=90, ax=ax1)
+                        ax1.set_ylabel("")
+                        st.pyplot(fig1)
 
-                st.subheader("Частотность слов в положительных отзывах")
-                with st.spinner("Анализируем..."):
-                    word_counts = pd.Series([word for word in " ".join(df[df["Sentiment"] == "Positive"][requirement].apply(preprocess_text)).split() if word not in STOPWORDS_RU]).value_counts()[:10]
-                    fig2, ax2 = plt.subplots()
-                    word_counts.plot(kind="barh", color="#A476F3", ax=ax2)
-                    st.pyplot(fig2)
+                    if not df[df["Sentiment"] == "Positive"][requirement].empty:
+                        st.subheader("Частотность слов в положительных отзывах")
+                        with st.spinner("Анализируем..."):
+                            word_counts = pd.Series([word for word in " ".join(df[df["Sentiment"] == "Positive"][requirement].apply(preprocess_text)).split() if word not in STOPWORDS_RU]).value_counts()[:10]
+                            fig2, ax2 = plt.subplots()
+                            word_counts.plot(kind="barh", color="#A476F3", ax=ax2)
+                            st.pyplot(fig2)
 
-                st.subheader("Частотность слов в отрицательных отзывах")
-                with st.spinner("Анализируем..."):
-                    word_counts = pd.Series([word for word in " ".join(df[df["Sentiment"] == "Negative"][requirement].apply(preprocess_text)).split() if word not in STOPWORDS_RU]).value_counts()[:10]
-                    fig3, ax3 = plt.subplots()
-                    word_counts.plot(kind="barh", color="#A476F3", ax=ax3)
-                    st.pyplot(fig3)
+                    if not df[df["Sentiment"] == "Negative"][requirement].empty:
+                        st.subheader("Частотность слов в отрицательных отзывах")
+                        with st.spinner("Анализируем..."):
+                            word_counts = pd.Series([word for word in " ".join(df[df["Sentiment"] == "Negative"][requirement].apply(preprocess_text)).split() if word not in STOPWORDS_RU]).value_counts()[:10]
+                            fig3, ax3 = plt.subplots()
+                            word_counts.plot(kind="barh", color="#A476F3", ax=ax3)
+                            st.pyplot(fig3)
+                    
+                    if not df[df["Sentiment"] == "Positive"][requirement].empty:
+                        st.subheader("Топ биграмм в положительных отзывах")
+                        with st.spinner("Анализируем..."):
+                            top_bigrams = get_top_bigrams(df[df["Sentiment"] == "Positive"][requirement])
+                            fig4, ax4 = plt.subplots()
+                            top_bigrams.plot(kind="barh", color="#A476F3", ax=ax4)
+                            st.pyplot(fig4)
 
-                st.subheader("Топ биграмм в положительных отзывах")
-                with st.spinner("Анализируем..."):
-                    top_bigrams = get_top_bigrams(df[df["Sentiment"] == "Positive"][requirement])
-                    fig4, ax4 = plt.subplots()
-                    top_bigrams.plot(kind="barh", color="#A476F3", ax=ax4)
-                    st.pyplot(fig4)
-
-                st.subheader("Топ биграмм в отрицательных отзывах")
-                with st.spinner("Анализируем..."):
-                    top_bigrams = get_top_bigrams(df[df["Sentiment"] == "Negative"][requirement])
-                    fig5, ax5 = plt.subplots()
-                    top_bigrams.plot(kind="barh", color="#A476F3", ax=ax5)
-                    st.pyplot(fig5)
+                    if not df[df["Sentiment"] == "Negative"][requirement].empty:
+                        st.subheader("Топ биграмм в отрицательных отзывах")
+                        with st.spinner("Анализируем..."):
+                            top_bigrams = get_top_bigrams(df[df["Sentiment"] == "Negative"][requirement])
+                            fig5, ax5 = plt.subplots()
+                            top_bigrams.plot(kind="barh", color="#A476F3", ax=ax5)
+                            st.pyplot(fig5)
             except Exception as e:
                 logger.error(f"Error while analys: {str(e)}")
