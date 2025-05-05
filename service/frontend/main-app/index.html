@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html> 
+    <head>
+        <link rel="stylesheet" href="style.css">
+        <link rel="icon" type="image/x-icon" href="svgs/tmp-favicon.png">
+        <script src="config.js"></script>
+        <script src="script.js" defer></script>
+        <title>Классификатор отзывов</title>
+    </head>
+    <body>
+        <div id="loading-overlay" class="hidden">
+            <div class="spinner"></div>
+        </div>        
+        <header>
+            <div class="island">
+                <p>Rate me!</p>
+                <div class="header-right">
+                    <p>Создать аккаунт</p>
+                    <p class="active">Войти</p>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="classifier-header">
+                <h1>Классификатор отзывов</h1>
+                <div class="header-right">
+                    <div class="model-selector">
+                        <button class="model-btn active">Товары</button>
+                        <button class="model-btn">Одежда</button>
+                        <button class="model-btn">Фильмы</button>
+                        <button class="model-btn">Товары и одежда</button>
+                    </div>
+                </div>
+            </div>
+            <div class="island">
+                <div class="input-container">
+                    <input type="text" placeholder="Вставьте ссылку на товар или загрузите CSV через сервис, доступный по кнопке справа" id="product-input"/>
+                    <button class="submit-btn" id="submit-button"><img src="svgs/upload.svg" id="submit-icon"/></button>
+                </div>
+            </div>
+            <p class="model-info">Выбрана <strong>Товары</strong>, убедитесь, что товар находится на подходящей платформе, чтобы получить корректный результат</p>
+        </main>
+
+        <footer>
+            <p>Поддержка: mrwinchap@gmail.com</p>
+            <div class="header-right">
+                <span class="logo-button">
+                    <a target="_blank" rel="noopener noreferrer" href="https://github.com/1gfgh/classification_of_reviews"><img src="svgs/git.svg"/></a>
+                </span>
+                <span class="logo-button">
+                    <a target="_blank" rel="noopener noreferrer" href="https://t.me/id2705"><img src="svgs/tg.svg"/></a>
+                </span>
+            </div>
+        </footer>
+    </body>
+</html>
