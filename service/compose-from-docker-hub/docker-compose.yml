@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  fastapi:
+    image: winchap/service-fastapi:latest
+    container_name: fastapi-app
+    ports:
+      - "1233:1233"
+    env_file:
+      - ./backend.env
+    depends_on:
+      pgdb:
+        condition: service_healthy
+
+  streamlit:
+    image: winchap/service-streamlit:latest
+    container_name: streamlit-app
+    ports:
+      - "8501:8501"
+    env_file:
+      - ./frontend.env
+
+  frontend:
+    image: winchap/service-frontend:latest
+    container_name: website
+    ports:
+      - "8080:80"
+    volumes:
+      - ./config.js:/usr/share/nginx/html/config.js:ro
+
+  pgdb:
+    image: postgres:16
+    container_name: postgres_reviews
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reviews_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reviews_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.localdomain
+      PGADMIN_DEFAULT_PASSWORD: password
+      PGADMIN_LISTEN_ADDRESS: 0.0.0.0
+      PGADMIN_DISABLE_POSTFIX: 1
+    ports:
+      - "5445:80"
+    depends_on:
+      pgdb:
+        condition: service_healthy
+
+volumes:
+  pgdata:

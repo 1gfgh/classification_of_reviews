@@ -1,0 +1,12 @@
+streamlit
+requests
+pandas
+numpy
+matplotlib
+stop-words
+nltk
+python-dotenv
+openpyxl
+xlrd
+pyxlsb
+odfpy
