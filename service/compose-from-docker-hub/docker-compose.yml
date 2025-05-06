@@ -25,6 +25,8 @@ services:
     container_name: website
     ports:
       - "8080:80"
+    volumes:
+      - ./config.js:/usr/share/nginx/html/config.js:ro
 
   pgdb:
     image: postgres:16
