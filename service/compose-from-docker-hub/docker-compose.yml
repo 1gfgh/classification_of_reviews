@@ -2,26 +2,26 @@ version: "3.9"
 
 services:
   fastapi:
-    build: ./backend
+    image: winchap/service-fastapi:latest
     container_name: fastapi-app
     ports:
       - "1233:1233"
     env_file:
-      - ./backend/.env
+      - ./backend.env
     depends_on:
       pgdb:
         condition: service_healthy
 
   streamlit:
-    build: ./frontend/streamlit-data-app
+    image: winchap/service-streamlit:latest
     container_name: streamlit-app
     ports:
       - "8501:8501"
     env_file:
-      - ./frontend/streamlit-data-app/.env
+      - ./frontend.env
 
   frontend:
-    build: ./frontend/main-app
+    image: winchap/service-frontend:latest
     container_name: website
     ports:
       - "8080:80"

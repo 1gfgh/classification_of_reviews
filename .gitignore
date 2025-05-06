@@ -8,4 +8,6 @@ pg_data
 test*
 extra*
 .env
+backend.env
+frontend.env
 *.pkl

@@ -1,3 +1,11 @@
-fastapi==0.110.1
-uvicorn[standard]==0.29.0
-asyncpg==0.29.0
+asyncpg==0.30.0
+boto3==1.38.1
+fastapi==0.115.12
+httpx==0.28.1
+numpy==2.2.5
+pandas==2.2.3
+python-dotenv==1.1.0
+rsa==4.9.1
+scikit_learn==1.6.1
+uvicorn==0.34.2
+python-multipart
