@@ -1,0 +1,8 @@
+[theme]
+base="light"
+primaryColor="#A476F3"
+backgroundColor="#FFFFFF"
+textColor="#2A2932"
+
+[server]
+maxUploadSize = 500
