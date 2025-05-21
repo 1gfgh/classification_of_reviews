@@ -225,15 +225,18 @@ async function loginUser(login, password) {
             method: 'POST',
             body: formData
         });
-
+        const message = await response.json()
         if (response.ok) {
+            if (message === false) {
+                showAnimatedAlert('Ошибка входа: Wrong password', 'error');
+                return;
+            }
             showAnimatedAlert('Успешный вход в аккаунт!', 'success');
             sessionStorage.setItem('login', login);
             changeHeaderToLoggedIn();
             checkForUserModels(login);
         } else {
-            const error = await response.json();
-            showAnimatedAlert('Ошибка входа: ' + error.detail, 'error');
+            showAnimatedAlert('Ошибка входа: ' + message.detail, 'error');
         }
     } catch (error) {
         showAnimatedAlert('Ошибка сети при входе', 'error');

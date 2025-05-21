@@ -11,11 +11,11 @@ import asyncpg
 import boto3
 import pickle
 import pandas as pd
-import rsa
 from dotenv import load_dotenv
 import uvicorn
 
 from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from asyncpg import Pool
 from rsa import decrypt, PrivateKey
 import constants
@@ -37,6 +37,16 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 pool: Pool = None
 app = FastAPI()
+
+# CORS allow the user agent to obtain permissions
+# to access resources from other domains
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 try:
     logger.info("Loading base models")
@@ -249,7 +259,7 @@ async def get_predict(
         raise HTTPException(status_code=422, detail="Review column not found")
 
     try:
-        y_pred = await predict_async(model, data["Review"], login)
+        y_pred = await predict_async(model, data["Review"].apply(str), login)
         if model.isdigit():
             model = f"{login}_{model}"
     except Exception as error:
@@ -315,7 +325,9 @@ async def predict_by_link(
         logger.error(f"Error during prediction: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Prediction error: {str(e)}")
+
     y_pred = await predict_async(model, data["Review"], login)
+    data["predict"] = y_pred
     query = """
             INSERT INTO classification_reviews.predicts (owner, used_model, predict_date) VALUES
             ($1, $2, $3)
@@ -371,7 +383,7 @@ async def logreg_fit(data: pd.DataFrame):
         ('tf', TfidfVectorizer()),
         ('clf', LogisticRegression(random_state=42))
     ])
-    logreg_model.fit(data["Review"], data["Sentiment"])
+    logreg_model.fit(data["Review"].apply(str), data["Sentiment"])
     return logreg_model
 
 
@@ -441,7 +453,7 @@ async def fit(
     return model_id
 
 
-@app.get("/get_models")
+@app.post("/get_models")
 async def get_models(
     login: Annotated[str, Form()],
     db=Depends(get_connection)
